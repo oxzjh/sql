@@ -79,7 +79,7 @@ func (b *base) Query(query string, args ...any) (keys []string, values [][]strin
 }
 
 func (b *base) QueryObject(query string, args []any, dest ...any) {
-	if err := b.q.QueryRow(query, args...).Scan(dest...); err != nil {
+	if err := b.q.QueryRow(query, args...).Scan(dest...); err != nil && err != sql.ErrNoRows {
 		b.onError(err, query, args)
 	}
 }
