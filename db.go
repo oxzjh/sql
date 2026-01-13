@@ -3,6 +3,7 @@ package sql
 import (
 	"database/sql"
 	"database/sql/driver"
+	"log"
 	"time"
 )
 
@@ -38,6 +39,12 @@ func (d *db) Transact(handler func(IBase) bool) {
 	if err != nil {
 		d.onError(err, "begin", nil)
 	}
+	defer func() {
+		if err := recover(); err != nil {
+			log.Println(err)
+			tx.Rollback()
+		}
+	}()
 	if handler(&base{tx, tx, d.onError}) {
 		tx.Commit()
 	} else {
