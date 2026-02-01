@@ -73,6 +73,10 @@ func Open(driver, source string, pool int, maxIdleTime time.Duration) (IDB, erro
 	if err != nil {
 		return nil, err
 	}
+	if err = execDB.Ping(); err != nil {
+		execDB.Close()
+		return nil, err
+	}
 	if pool > 0 {
 		execDB.SetMaxOpenConns(pool)
 	}
@@ -84,6 +88,10 @@ func Open(driver, source string, pool int, maxIdleTime time.Duration) (IDB, erro
 
 func OpenDB(driver string, connector driver.Connector, pool int, maxIdleTime time.Duration) (IDB, error) {
 	execDB := sql.OpenDB(connector)
+	if err := execDB.Ping(); err != nil {
+		execDB.Close()
+		return nil, err
+	}
 	if pool > 0 {
 		execDB.SetMaxOpenConns(pool)
 	}
@@ -98,9 +106,18 @@ func OpenSeparated(driver, execSource, querySource string, pool int, maxIdleTime
 	if err != nil {
 		return nil, err
 	}
+	if err = execDB.Ping(); err != nil {
+		execDB.Close()
+		return nil, err
+	}
 	queryDB, err := sql.Open(driver, querySource)
 	if err != nil {
 		execDB.Close()
+		return nil, err
+	}
+	if err = queryDB.Ping(); err != nil {
+		execDB.Close()
+		queryDB.Close()
 		return nil, err
 	}
 	if pool > 0 {

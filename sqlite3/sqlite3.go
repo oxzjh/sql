@@ -6,5 +6,5 @@ import (
 )
 
 func Open(source string) (sql.IDB, error) {
-	return sql.Open(source, source, 0, 0)
+	return sql.Open("sqlite3", source, 0, 0)
 }
