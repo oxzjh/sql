@@ -12,8 +12,7 @@ type IDB interface {
 	Driver() string
 	GetExecDB() *sql.DB
 	GetQueryDB() *sql.DB
-	Transact(func(IBase) bool)
-	OnError(func(error, string, []any))
+	Transact(func(IBase) error, func(any)) error
 	Close()
 }
 
@@ -34,30 +33,26 @@ func (d *db) GetQueryDB() *sql.DB {
 	return d.q.(*sql.DB)
 }
 
-func (d *db) Transact(handler func(IBase) bool) {
+func (d *db) Transact(handler func(IBase) error, onPanic func(any)) error {
 	tx, err := d.GetExecDB().Begin()
 	if err != nil {
-		d.onError(err, "begin", nil)
+		return err
 	}
 	defer func() {
 		if err := recover(); err != nil {
-			log.Println(err)
+			if onPanic != nil {
+				onPanic(err)
+			} else {
+				log.Println(err)
+			}
 			tx.Rollback()
 		}
 	}()
-	if handler(&base{tx, tx, d.onError}) {
-		tx.Commit()
-	} else {
+	if err := handler(&base{tx, tx}); err != nil {
 		tx.Rollback()
+		return err
 	}
-}
-
-func (d *db) OnError(onError func(error, string, []any)) {
-	if onError == nil {
-		d.onError = defaultOnError
-	} else {
-		d.onError = onError
-	}
+	return tx.Commit()
 }
 
 func (d *db) Close() {
@@ -83,7 +78,7 @@ func Open(driver, source string, pool int, maxIdleTime time.Duration) (IDB, erro
 	if maxIdleTime > 0 {
 		execDB.SetConnMaxIdleTime(maxIdleTime)
 	}
-	return &db{base{execDB, execDB, defaultOnError}, driver}, nil
+	return &db{base{execDB, execDB}, driver}, nil
 }
 
 func OpenDB(driver string, connector driver.Connector, pool int, maxIdleTime time.Duration) (IDB, error) {
@@ -98,7 +93,7 @@ func OpenDB(driver string, connector driver.Connector, pool int, maxIdleTime tim
 	if maxIdleTime > 0 {
 		execDB.SetConnMaxIdleTime(maxIdleTime)
 	}
-	return &db{base{execDB, execDB, defaultOnError}, driver}, nil
+	return &db{base{execDB, execDB}, driver}, nil
 }
 
 func OpenSeparated(driver, execSource, querySource string, pool int, maxIdleTime time.Duration) (IDB, error) {
@@ -128,5 +123,5 @@ func OpenSeparated(driver, execSource, querySource string, pool int, maxIdleTime
 		execDB.SetConnMaxIdleTime(maxIdleTime)
 		queryDB.SetConnMaxIdleTime(maxIdleTime)
 	}
-	return &db{base{execDB, queryDB, defaultOnError}, driver}, nil
+	return &db{base{execDB, queryDB}, driver}, nil
 }

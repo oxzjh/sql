@@ -47,7 +47,7 @@ func GetUsers(db sql.IDB) []*User {
 		host string
 		user string
 	)
-	db.QueryArray(
+	db.QueryRows(
 		"SELECT Host,User FROM mysql.user",
 		nil,
 		[]any{&host, &user},
