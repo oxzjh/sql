@@ -6,6 +6,7 @@ import (
 )
 
 type IWrap interface {
+	GetDB() IDB
 	Exec(string, ...any)
 	QueryOne(string, []any, ...any)
 	QueryRows(string, []any, []any, func())
@@ -22,6 +23,10 @@ type IWrap interface {
 type wrap struct {
 	db      IDB
 	onError func(string, []any, error)
+}
+
+func (w *wrap) GetDB() IDB {
+	return w.db
 }
 
 func (w *wrap) Exec(query string, args ...any) {
