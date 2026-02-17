@@ -2,63 +2,105 @@ package sql
 
 import (
 	"database/sql"
+	"log"
 )
 
-type isql interface {
-	Exec(string, ...any) (sql.Result, error)
-	Query(string, ...any) (*sql.Rows, error)
-	QueryRow(string, ...any) *sql.Row
+type ISQL interface {
+	GetDB() IDB
+	Exec(string, ...any)
+	QueryOne(string, []any, ...any)
+	QueryRows(string, []any, []any, func())
+	AffectedRows(string, ...any) int64
+	InsertId(string, ...any) int64
+	Driver() string
+	GetExecDB() *sql.DB
+	GetQueryDB() *sql.DB
+	Transact(func(IBase) error)
+	Close()
+	SetOnError(func(string, []any, error))
 }
 
-type IBase interface {
-	Exec(string, ...any) error
-	QueryOne(string, []any, ...any) error
-	QueryRows(string, []any, []any, func()) error
-	AffectedRows(string, ...any) (int64, error)
-	InsertId(string, ...any) (int64, error)
+type wrap struct {
+	db      IDB
+	onError func(string, []any, error)
 }
 
-type base struct {
-	e isql
-	q isql
+func (w *wrap) GetDB() IDB {
+	return w.db
 }
 
-func (b *base) Exec(query string, args ...any) (err error) {
-	_, err = b.e.Exec(query, args...)
-	return
+func (w *wrap) Exec(query string, args ...any) {
+	if err := w.db.Exec(query, args...); err != nil {
+		w.onError(query, args, err)
+	}
 }
 
-func (b *base) QueryOne(query string, args []any, dest ...any) error {
-	return b.q.QueryRow(query, args...).Scan(dest...)
+func (w *wrap) QueryOne(query string, args []any, dest ...any) {
+	if err := w.db.QueryOne(query, args, dest); err != nil {
+		w.onError(query, args, err)
+	}
 }
 
-func (b *base) QueryRows(query string, args, dest []any, callback func()) error {
-	rows, err := b.q.Query(query, args...)
+func (w *wrap) QueryRows(query string, args []any, dest []any, callback func()) {
+	if err := w.db.QueryRows(query, args, dest, callback); err != nil {
+		w.onError(query, args, err)
+	}
+}
+
+func (w *wrap) AffectedRows(query string, args ...any) int64 {
+	rows, err := w.db.AffectedRows(query, args...)
 	if err != nil {
-		return err
+		w.onError(query, args, err)
 	}
-	defer rows.Close()
-	for rows.Next() {
-		if err = rows.Scan(dest...); err != nil {
-			return err
-		}
-		callback()
-	}
-	return nil
+	return rows
 }
 
-func (b *base) AffectedRows(query string, args ...any) (int64, error) {
-	result, err := b.e.Exec(query, args...)
+func (w *wrap) InsertId(query string, args ...any) int64 {
+	id, err := w.db.InsertId(query, args...)
 	if err != nil {
-		return 0, err
+		w.onError(query, args, err)
 	}
-	return result.RowsAffected()
+	return id
 }
 
-func (b *base) InsertId(query string, args ...any) (int64, error) {
-	result, err := b.e.Exec(query, args...)
-	if err != nil {
-		return 0, err
+func (w *wrap) Driver() string {
+	return w.db.Driver()
+}
+
+func (w *wrap) GetExecDB() *sql.DB {
+	return w.db.GetExecDB()
+}
+
+func (w *wrap) GetQueryDB() *sql.DB {
+	return w.db.GetQueryDB()
+}
+
+func (w *wrap) Transact(handler func(IBase) error) {
+	if err := w.db.Transact(handler, nil); err != nil {
+		w.onError("BEGIN", nil, err)
 	}
-	return result.LastInsertId()
+}
+
+func (w *wrap) Close() {
+	w.db.Close()
+}
+
+func (w *wrap) SetOnError(onError func(string, []any, error)) {
+	if onError == nil {
+		w.onError = defaultOnError
+	} else {
+		w.onError = onError
+	}
+}
+
+func New(db IDB, onError func(string, []any, error)) ISQL {
+	if onError == nil {
+		onError = defaultOnError
+	}
+	return &wrap{db, onError}
+}
+
+func defaultOnError(query string, args []any, err error) {
+	log.Println(query, args)
+	log.Println(err)
 }
