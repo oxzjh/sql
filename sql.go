@@ -43,7 +43,7 @@ func (w *wrap) QueryOne(query string, args []any, dest ...any) {
 	if w.onQuery != nil {
 		w.onQuery(query, args)
 	}
-	if err := w.db.QueryOne(query, args, dest); err != nil {
+	if err := w.db.QueryOne(query, args, dest...); err != nil {
 		w.onError(query, args, err)
 	}
 }
