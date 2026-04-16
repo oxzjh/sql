@@ -23,6 +23,7 @@ type ISQL interface {
 type wrap struct {
 	db      IDB
 	onError func(string, []any, error)
+	onQuery func(string, []any)
 }
 
 func (w *wrap) GetDB() IDB {
@@ -30,24 +31,36 @@ func (w *wrap) GetDB() IDB {
 }
 
 func (w *wrap) Exec(query string, args ...any) {
+	if w.onQuery != nil {
+		w.onQuery(query, args)
+	}
 	if err := w.db.Exec(query, args...); err != nil {
 		w.onError(query, args, err)
 	}
 }
 
 func (w *wrap) QueryOne(query string, args []any, dest ...any) {
+	if w.onQuery != nil {
+		w.onQuery(query, args)
+	}
 	if err := w.db.QueryOne(query, args, dest); err != nil {
 		w.onError(query, args, err)
 	}
 }
 
 func (w *wrap) QueryRows(query string, args []any, dest []any, callback func()) {
+	if w.onQuery != nil {
+		w.onQuery(query, args)
+	}
 	if err := w.db.QueryRows(query, args, dest, callback); err != nil {
 		w.onError(query, args, err)
 	}
 }
 
 func (w *wrap) AffectedRows(query string, args ...any) int64 {
+	if w.onQuery != nil {
+		w.onQuery(query, args)
+	}
 	rows, err := w.db.AffectedRows(query, args...)
 	if err != nil {
 		w.onError(query, args, err)
@@ -56,6 +69,9 @@ func (w *wrap) AffectedRows(query string, args ...any) int64 {
 }
 
 func (w *wrap) InsertId(query string, args ...any) int64 {
+	if w.onQuery != nil {
+		w.onQuery(query, args)
+	}
 	id, err := w.db.InsertId(query, args...)
 	if err != nil {
 		w.onError(query, args, err)
@@ -93,14 +109,16 @@ func (w *wrap) SetOnError(onError func(string, []any, error)) {
 	}
 }
 
-func New(db IDB, onError func(string, []any, error)) ISQL {
+func New(db IDB, onError func(string, []any, error), onQuery func(string, []any)) ISQL {
 	if onError == nil {
 		onError = defaultOnError
 	}
-	return &wrap{db, onError}
+	return &wrap{db, onError, onQuery}
 }
 
 func defaultOnError(query string, args []any, err error) {
-	log.Println(query, args)
-	log.Println(err)
+	if err != sql.ErrNoRows {
+		log.Println(query, args)
+		log.Println(err)
+	}
 }
