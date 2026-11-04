@@ -11,6 +11,10 @@ func Open(source string, pool int, maxIdleTime time.Duration) (sql.IDB, error) {
 	return sql.Open("mysql", source, pool, maxIdleTime)
 }
 
+func OpenDefault(source string) (sql.IDB, error) {
+	return Open(source, 64, time.Hour*8)
+}
+
 func OpenDB(cfg *mysql.Config, pool int, maxIdleTime time.Duration) (sql.IDB, error) {
 	connector, err := mysql.NewConnector(cfg)
 	if err != nil {
