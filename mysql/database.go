@@ -43,3 +43,10 @@ func GetDatabases(db sql.IDB) []*Database {
 	)
 	return databases
 }
+
+func CreateAndUseDatabase(db sql.IDB, name string) error {
+	if err := db.Exec("CREATE DATABASE IF NOT EXISTS " + name + " CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci"); err != nil {
+		return err
+	}
+	return db.Exec("USE " + name)
+}
